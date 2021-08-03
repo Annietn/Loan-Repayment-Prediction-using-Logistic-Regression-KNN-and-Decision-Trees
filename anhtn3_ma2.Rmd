@@ -1,0 +1,395 @@
+---
+title: "R Notebook"
+author: Annie Nguyen
+output:
+  html_document:
+    df_print: paged
+---
+
+# Q1. Find a dataset and a problem that you would like to solve using one of the supervised or unsupervised machine learning algorithms taught in this course (Modules 5-8).
+
+My dataset comes from https://www.kaggle.com/kennykozak/loan-repayment-prediction
+I would like to solve the problem by using Logistic Regression, KNN Trees and DECISION TREES.
+
+# Q2. The dataset must meet the requirement for this given algorithm. For example, a supervised machine learning algorithm requires the target variable while a clustering algorithm does no
+
+In this dataset, I tried to predict the risk of a borrower being unable to repay a loan.
+Target variable is not.fully.paid
+Independent variables are credit.policy, purpose, int.rate, installment, log.annual.inc, dti, fico, days.with.cr.line, revol.bal, revol.util, inq.last.6mths, delinq.2yrs and pub.rec.
+
+# Q3. The dataset must have a minimum 500 rows.
+The dataset has 9578 rows.
+
+# Q4. The dataset may come from a public source or your workplace, but make sure it is something that you are inherently interested in working on.
+My dataset comes from https://www.kaggle.com/kennykozak/loan-repayment-prediction. According to the author, the data was collected from LendingClub.com, a website that connects borrowers and investors through the Internet.
+
+
+# Q5. As part of the summary write-up described below, clearly describe the business problem: whether it is explanatory (causal) or predictive; discuss the dependent/ target variable; discuss independent/ predictor variables. Finally, discuss how knowledge generated from this model will help in decision making. If possible, discuss the various costs it may save or additional revenue it may generate.
+In this dataset, I try to predict the risk of a borrower being unable to repay a loan.Target variable is not.fully.paid - the loan was not paid in full. Independent variables are credit.policy, purpose, int.rate, installment, log.annual.inc, dti, fico, days.with.cr.line, revol.bal, revol.util, inq.last.6mths, delinq.2yrs and pub.rec. 
+
+# Q6. Read in the data.
+
+## Loading the necessary libraries
+
+```{r}
+library(tidyverse)
+library(caret) # For Logistic Regression, KNN Tree and Decision Tree
+library(fastDummies) # For KNN Tree
+library(class) # For KNN Tree
+library(rpart) # For Decision Tree
+library(rpart.plot) # For Decision Tree
+```
+
+
+```{r}
+df <- read.csv('loan_data_final.csv', stringsAsFactors = FALSE)
+```
+# Q7. Make sure all columns to be used in the analysis are set to correct data types. That is, for example, if you want to use a date column, it is set as "date" type.
+```{r}
+df$purpose <- as.factor(df$purpose)
+```
+"Purpose" is the purpose of the loan, and is classified as "debtconsolidation", "educational", "smallbusiness", and "all_other". The datatype of "purpose" was character, I would like to convert it into factor to use it in the model.
+Later, in the process of prediction in logistic regression, I would convert all columns into numeric with the function: df <- df %>% mutate_at(c(1:14), as.numeric)
+
+# Q8. Handle missing values appropriately by either deleting them or imputing them (replacing them in some way that makes sense)
+
+```{r}
+df <- df %>%
+  filter(!is.na(df)) # Removing the observations that have missing values.
+```
+
+# Q9. Do any other ETL and data clean-up tasks as required for the given algorithm
+Later, in the process of prediction in logistic regression, I would convert all columns into numeric with the function: df <- df %>% mutate_at(c(1:14), as.numeric)
+
+# Q10. Print the data types of each column (e.g., use the `str()` function in RStudio)
+```{r}
+str(df)
+```
+# Q11. Show summary of the columns (e.g., use the `summary()` function in RStudio)
+```{r}
+summary(df)
+```
+# Q12. Split the data into train and test datasets, if interested in making a predictive model.
+# Q13. Run your model/ algorithm.
+
+## Logistic Regression 
+
+### Initial loading of data, packages, and functions
+```{r}
+# Run confusion matrix function
+my_confusion_matrix <- function(cf_table) {
+  true_positive <- cf_table[4]
+  true_negative <- cf_table[1]
+  false_positive <- cf_table[2]
+  false_negative <- cf_table[3]
+  accuracy <- (true_positive + true_negative) / (true_positive + true_negative + false_positive + false_negative)
+  sensitivity_recall <- true_positive / (true_positive + false_negative) 
+  specificity_selectivity <- true_negative / (true_negative + false_positive)
+  precision <- true_positive / (true_positive + false_positive) 
+  neg_pred_value <- true_negative/(true_negative + false_negative)
+  print(cf_table)
+  my_list <- list(sprintf("%1.0f = True Positive (TP), Hit", true_positive),
+                  sprintf("%1.0f = True Negative (TN), Rejection", true_negative),
+                  sprintf("%1.0f = False Positive (FP), Type 1 Error", false_positive),
+                  sprintf("%1.0f = False Negative (FN), Type 2 Error", false_negative),
+                  sprintf("%1.4f = Accuracy (TP+TN/(TP+TN+FP+FN))", accuracy), 
+                  sprintf("%1.4f = Sensitivity, Recall, Hit Rate, True Positive Rate (How many positives did the model get right? TP/(TP+FN))", sensitivity_recall),
+                  sprintf("%1.4f = Specificity, Selectivity, True Negative Rate (How many negatives did the model get right? TN/(TN+FP))", specificity_selectivity),
+                  sprintf("%1.4f = Precision, Positive Predictive Value (How good are the model's positive predictions? TP/(TP+FP))", precision),
+                  sprintf("%1.4f = Negative Predictive Value (How good are the model's negative predictions? TN/(TN+FN)", neg_pred_value)
+  )
+  return(my_list)
+}
+```
+
+### Prepare the data
+```{r}
+
+logit1 <- df %>% 
+  ungroup() %>% 
+  select(int.rate, installment, dti, fico, not.fully.paid)
+
+# For use in the model
+logit2 <- df %>% 
+  ungroup() %>% 
+  select(not.fully.paid, 
+         credit.policy, purpose, int.rate, 
+         installment, log.annual.inc, dti,
+         fico, days.with.cr.line, revol.bal, revol.bal, inq.last.6mths, delinq.2yrs, pub.rec)
+
+# Check that "positive" is last for the `my_confusion_matrix` to work 
+contrasts(factor(logit2$not.fully.paid))
+
+```
+
+```{r}
+# Partition the data into testing and training datasets
+
+set.seed(77) 
+partition <- caret::createDataPartition(y=logit2$not.fully.paid, p=.75, list=FALSE)
+data_train <- logit2[partition, ]
+data_test <- logit2[-partition, ]
+
+```
+
+
+### Train the multivariate model
+```{r}
+model_train <- glm(not.fully.paid ~ ., family=binomial, data=data_train)
+summary(model_train)
+```
+
+### Predict the response variable
+```{r}
+predict_test <- predict(model_train, newdata=data_test, type='response')
+```
+
+
+### Form table to look at the accuracy of the model
+```{r}
+table2 <- table(predict_test>.5, data_test$not.fully.paid) #prediction on left and truth on top
+my_confusion_matrix(table2)
+```
+
+
+### Use the predictions above to help the business
+```{r}
+# Put the prediction back into the test data
+data_test$prediction <- predict_test
+
+# Create a variable that shows if the prediction was correct 
+# (We have to do the classification--in `round(prediction)`--since logistic regression gives us a probability)
+data_test <- data_test %>% mutate(correct_prediction = if_else(round(prediction) == not.fully.paid, 'correct', 'WRONG!'))
+
+# Add back the original data
+temp1 <- logit1[-partition, ]
+full_test <- bind_cols(temp1, data_test)
+
+# Convert all columns into numeric
+
+df <- df %>% 
+     mutate_at(c(1:14), as.numeric)
+
+# For viewing
+full_test <- full_test %>% 
+  select(c(1:14))
+slice_sample(full_test, n=10)
+
+```
+
+## KNN Trees
+
+### Initial loading of data, packages, and functions
+```{r}
+# Run confusion matrix function 
+my_confusion_matrix <- function(cf_table) {
+  true_positive <- cf_table[4]
+  true_negative <- cf_table[1]
+  false_positive <- cf_table[2]
+  false_negative <- cf_table[3]
+  accuracy <- (true_positive + true_negative) / (true_positive + true_negative + false_positive + false_negative)
+  sensitivity_recall <- true_positive / (true_positive + false_negative) 
+  specificity_selectivity <- true_negative / (true_negative + false_positive)
+  precision <- true_positive / (true_positive + false_positive) 
+  neg_pred_value <- true_negative/(true_negative + false_negative)
+  print(cf_table)
+  my_list <- list(sprintf("%1.0f = True Positive (TP), Hit", true_positive),
+                  sprintf("%1.0f = True Negative (TN), Rejection", true_negative),
+                  sprintf("%1.0f = False Positive (FP), Type 1 Error", false_positive),
+                  sprintf("%1.0f = False Negative (FN), Type 2 Error", false_negative),
+                  sprintf("%1.4f = Accuracy (TP+TN/(TP+TN+FP+FN))", accuracy), 
+                  sprintf("%1.4f = Sensitivity, Recall, Hit Rate, True Positive Rate (How many positives did the model get right? TP/(TP+FN))", sensitivity_recall),
+                  sprintf("%1.4f = Specificity, Selectivity, True Negative Rate (How many negatives did the model get right? TN/(TN+FP))", specificity_selectivity),
+                  sprintf("%1.4f = Precision, Positive Predictive Value (How good are the model's positive predictions? TP/(TP+FP))", precision),
+                  sprintf("%1.4f = Negative Predictive Value (How good are the model's negative predictions? TN/(TN+FN)", neg_pred_value)
+  )
+  return(my_list)
+}
+
+```
+
+
+### Preprocess data for knn
+```{r}
+# Not for the model
+knn1 <- df %>% ungroup() %>% 
+  select(purpose, int.rate, dti, fico, not.fully.paid)
+
+# make the target feature a factor and put the "low" level first so `my_confusion_matrix()` works correctly
+knn2 <- df %>% mutate(not.fully.paid = factor(if_else(not.fully.paid==1, 'high', 'low'), levels=c('low', 'high'))) 
+knn2 <- knn2 %>% ungroup() %>% 
+  select(c(1:14))
+
+# Data must be numeric so one-hot encode `region`
+knn2 <- fastDummies::dummy_cols(knn2, select_columns = c("purpose"), remove_selected_columns=T)
+
+# Check that "positive" is last for the `my_confusion_matrix` to work 
+contrasts(knn2$not.fully.paid)
+```
+
+### Partition the data
+```{r}
+set.seed(77)
+partition <- caret::createDataPartition(y=knn2$not.fully.paid, p=.75, list=FALSE)
+data_train <- knn2[partition, ]
+data_test <- knn2[-partition, ]
+
+# Separate the target variable from the training and testing data 
+X_train <- data_train %>% select(-not.fully.paid)
+X_test <-  data_test %>% select(-not.fully.paid) 
+y_train <- data_train$not.fully.paid
+y_test <- data_test$not.fully.paid
+```
+
+
+### Features must be standardized so use z-score standardization
+```{r}
+X_train <- scale(X_train)
+X_test <- scale(X_test)
+```
+
+
+### Run the model
+```{r}
+knn_prediction = class::knn(train=X_train, test=X_test, cl=y_train, k=round(sqrt(nrow(data_train))/2))
+```
+
+
+### Confusion matrix - checking accuracy
+```{r}
+table2 <- table(knn_prediction, y_test) #prediction on left and truth on top
+my_confusion_matrix(table2)
+```
+# Put the data back together for future use
+```{r}
+# Put the prediction back into the test data
+data_test$knn <- knn_prediction
+
+# Create a variable that shows if the prediction was correct
+data_test <- data_test %>% 
+  mutate(correct_knn = if_else(knn == not.fully.paid, 'correct', 'WRONG!'))
+
+# Add back the original data to the test data
+temp1 <- knn1[-partition, ]
+full_test_knn <- bind_cols(temp1, data_test)
+
+# For viewing 
+full_test_knn <- full_test_knn %>% 
+  select(c(1:14), n=10)
+```
+
+## DECISION TREES
+### Preprocess data
+```{r}
+# Not for the model
+tree1 <- df %>% ungroup() %>% 
+  select(purpose, int.rate, dti, fico, not.fully.paid)
+
+# make the target feature and `region` a factor
+tree2 <- df %>% mutate(not.fully.paid = factor(if_else(not.fully.paid==1, 'high', 'low'), levels=c('low', 'high')),
+                       purpose = factor(purpose)) 
+tree2 <- tree2 %>% ungroup() %>% 
+  select(c(1:14))
+
+# Check that "positive" is last for `my_confusion_matrix()` to work 
+contrasts(tree2$not.fully.paid)
+```
+
+
+### Use the `caret` package to split the data, 75% training and 25% testing
+```{r}
+set.seed(77)
+partition <- caret::createDataPartition(y=tree2$not.fully.paid, p=.75, list=FALSE)
+data_train <- tree2[partition, ]
+data_test <- tree2[-partition, ]
+```
+
+### Use the `rpart()` function from the `rpart` package to train the model
+```{r}
+
+model_tree <- rpart::rpart(not.fully.paid ~ ., data_train)
+```
+
+
+### Use the trained model to predict whether `not.fully.paid` is high or low
+```{r}
+predict_tree <- predict(model_tree, data_test, type='class') #`type='class'` keeps this a factor 
+```
+
+
+### Use the confusion matrix code above to examine the accuracy of this model
+```{r}
+
+table1 <- table(predict_tree, data_test$not.fully.paid)
+my_confusion_matrix(table1)
+```
+
+
+### Using the `plot()` function draw a labeled picture of the tree model.
+```{r}
+rpart.plot::rpart.plot(model_tree, box.palette = 'RdBu', shadow.col = 'gray', nn=TRUE)
+```
+
+### Put the data back together for future use
+```{r}
+# Put the prediction back into the test data
+data_test$tree <- predict_tree
+
+# Create a variable that shows if the prediction was correct
+data_test <- data_test %>% 
+  mutate(correct_tree = if_else(tree == not.fully.paid, 'correct', 'WRONG!'))
+
+# Add back the original data
+temp1 <- tree1[-partition, ]
+full_test_tree <- bind_cols(temp1, data_test)
+
+# For viewing
+full_test_tree <- full_test_tree %>% 
+  select(c(1:14), n=10)
+```
+
+### Put the data back together for future use
+```{r}
+# For viewing
+full_test_knn <- full_test_knn %>% 
+  select(c(1:14))
+slice_sample(full_test_knn, n=10)
+```
+
+# Q14. Report model performance. 
+## Logistic Regression 
+
+The model selected purpose.other as an intercept. The coefficient of inq.last.6mths (The borrower's number of inquiries by creditors in the last 6 months), days.with.cr.line (The number of days the borrower has had a credit line), and purpose to take loan to set up a business are high, respectively equal to postive 9.314e-02, 6.969e-06, and 6.091e-01. Besides, their statistically significant are small. The two factors indicate that the borrower's inquiries by creditors in the last 6 months, the number of days the borrower has had a credit line and his/her purpose to take loan to set up a business, along with his/her other purposes of taking loan, would increase the risk of his/her inability of paying off a loan.
+
+On the other hand, the coefficient of log.annual.inc (The natural log of the self-reported annual income of the borrower) is negatively high (-3.564e-01), along with its statistically significant are small. This indicates that a borrower's self-reported annual income would decrease the risk of that he/she would not pay off a loan. 
+
+The accuracy of the model is 0.8492, indicating that the model helps us make a right decision by nearly 85% of the time. 
+The true positive rate is 11, showing that there are 11 times when customers do not fully pay back the loan, and the model correctly predict that happens.
+The True negative rate is 2022, showing that there are 2022 times when customers fully pay back the loan, and the model correctly predict that happens.
+The False Positive is 9, showing that there are 9 times when customers do fully pay back the loan, but the model incorrectly predict that they would not.
+The False Negative is 352, showing that there are 352 times when customers do not fully pay back the loan, but the model incorrectly predict that they would pay back the loan.
+The Senstivity rate is 3%, the specificity rate is 99.56% , the precision rate is 55% and the Negative Predictive Value is 85%, indicating that the model is good at predicting the possibility of customers fully paying back the loan. 
+
+## KNN Trees
+
+The accuracy of the model is 0.8413, indicating that the model helps us make a right decision by nearly 84% of the time. 
+The true positive rate is 4, showing that there are 4 times when customers do not fully pay back the loan, and the model correctly predict that happens.
+The True negative rate is 2010, showing that there are 2010 times when customers fully pay back the loan, and the model correctly predict that happens.
+The False Positive is 1, showing that there are 1 times when customers do fully pay back the loan, but the model incorrectly predict that they would not.
+The False Negative is 379, showing that there are 379 times when customers do not fully pay back the loan, but the model incorrectly predict that they would pay back the loan.
+The Senstivity rate is 1%, the specificity rate is 99.95% , the precision rate is 80% and the Negative Predictive Value is 84%, indicating that the model is good at predicting the possibility of customers fully paying back the loan. 
+
+## Decision Trees
+
+The accuracy of the model is 0.8400, indicating that the model helps us make a right decision by nearly 84% of the time. 
+The true positive rate is 0, showing that there is no occasion when customers do not fully pay back the loan, and the model correctly predict that happens.
+The True negative rate is 2010, showing that there are 2011 times when customers fully pay back the loan, and the model correctly predict that happens.
+The False Positive is 0, showing that there is no occasion when customers do fully pay back the loan, but the model incorrectly predict that they would not.
+The False Negative is 379, showing that there are 383 times when customers do not fully pay back the loan, but the model incorrectly predict that they would pay back the loan.
+The Senstivity rate is 0%, the specificity rate is 100% , the precision rate cannot be valued by the model and the Negative Predictive Value is 84%, indicating that the model is good at predicting the possibility of customers fully paying back the loan. 
+
+
+# Q15. Write a summary that includes the following: business problem (point 5 above), description and justification of the ML algorithm chosen, comments on the model performance, and insights from the model results. The suggested length is between 250 and 500 words.
+
+In lending industry, a lender gives a loan to a borrower, who is then expected to repay his/her debt. However, there is always a risk that the borrower is unable to repay the loan, causing the lender’s financial losses. Thus, determining the likelihood of loss on a loan is necessary for lenders in making a lending decision. In this dataset, I carried out a credit risk assessment by using logistic regression, KNN trees, and decision trees model. Using not.fully.paid as the dependent variable, I predict a borrower’s ability to pay off their loan based on his/her financial information, namely, his/her purpose of the loan, his/her FICO score, the number of his/her has had a credit line, his/her amount of used and unpaid credit card at the end of billing cycles, etc. as well as the lender’s interest rate and installment. The dataset contains 9578 rows and 14 variables, and there is no sign of any outliers. Although the three models show their advantages in predicting the possibility of borrower fully paying off the loan, logistic regression has the highest accuracy rate. In addition, logistic regression is the only model that shows the interrelationship between the borrower’s financial historical information and their ability of paying off the loan.  Specifically, the logistic regression model shows that the borrower's number of inquiries by creditors in the last 6 months, the number of days he/she has had a credit line, his/her purpose to take loan to set up a business, along with his/her other purposes of taking loan, are the most significant factors that would increase the risk of his/her inability of paying off a loan. On the other hand, his/her self-reported annual income would decrease the risk of that he/she would not pay off a loan. To improve the logistic regression model, in the future, I would remove all the insignificant variables and then run the model with all the significant variables. 
+
