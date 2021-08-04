@@ -212,7 +212,7 @@ knn_prediction = class::knn(train=X_train, test=X_test, cl=y_train, k=round(sqrt
 
 ### Confusion matrix - checking accuracy
 ```{r}
-table2 <- table(knn_prediction, y_test) #prediction on left and truth on top
+table2 <- table(knn_prediction, y_test) 
 my_confusion_matrix(table2)
 ```
 # Put the data back together for future use
@@ -245,8 +245,6 @@ tree2 <- df %>% mutate(not.fully.paid = factor(if_else(not.fully.paid==1, 'high'
                        purpose = factor(purpose)) 
 tree2 <- tree2 %>% ungroup() %>% 
   select(c(1:14))
-
-# Check that "positive" is last for `my_confusion_matrix()` to work 
 contrasts(tree2$not.fully.paid)
 ```
 
@@ -280,7 +278,7 @@ my_confusion_matrix(table1)
 ```
 
 
-### Using the `plot()` function draw a labeled picture of the tree model.
+### Draw a labeled picture of the tree model.
 ```{r}
 rpart.plot::rpart.plot(model_tree, box.palette = 'RdBu', shadow.col = 'gray', nn=TRUE)
 ```
