@@ -240,7 +240,7 @@ full_test_knn <- full_test_knn %>%
 tree1 <- df %>% ungroup() %>% 
   select(purpose, int.rate, dti, fico, not.fully.paid)
 
-# make the target feature and `region` a factor
+# make the target feature and `purpose` a factor
 tree2 <- df %>% mutate(not.fully.paid = factor(if_else(not.fully.paid==1, 'high', 'low'), levels=c('low', 'high')),
                        purpose = factor(purpose)) 
 tree2 <- tree2 %>% ungroup() %>% 
