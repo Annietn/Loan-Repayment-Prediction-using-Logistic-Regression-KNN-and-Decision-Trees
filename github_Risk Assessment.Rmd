@@ -175,7 +175,7 @@ knn2 <- df %>% mutate(not.fully.paid = factor(if_else(not.fully.paid==1, 'high',
 knn2 <- knn2 %>% ungroup() %>% 
   select(c(1:14))
 
-# Data must be numeric so one-hot encode `region`
+# Data must be numeric
 knn2 <- fastDummies::dummy_cols(knn2, select_columns = c("purpose"), remove_selected_columns=T)
 
 # Check that "positive" is last for the `my_confusion_matrix` to work 
